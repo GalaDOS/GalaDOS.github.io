@@ -5,4 +5,4 @@ order: 4
 ---
 
 
-**The Cake Is A Lie.**
+*The Cake Is A Lie.*
