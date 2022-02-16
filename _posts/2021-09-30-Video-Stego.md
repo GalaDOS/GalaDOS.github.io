@@ -118,7 +118,7 @@ _提取出的水印_
 ![图片经过有损压缩后提取的水印](/posts/2021-09-30/extracted_watermark_lossy.jpg)
 _图片经过有损压缩后提取的水印_
 
-LSB类型的隐形水印，或者说隐写术，因为其原理通俗易懂，所以使用比较广泛。它经常出现在一些线上解谜中，也有一些现成的工具帮助分析，比如stegsolve。另外，一些公司会用它在内部文档上做水印，用来在泄漏时追究员工责任。比如这个例子：[某乎问答：某司根据截图查到泄露信息的具体员工的技术是什么？](https://www.zhihu.com/question/50735753)。虽然这个问题点赞最多的答案讲的是变换域的方法（下一节要讲的方法），但是某司实际用的应该是LSB，毕竟本文后面要介绍的方法都比较重，不适合网页实时生成。
+LSB类型的隐形水印，或者说隐写术，因为其原理通俗易懂，所以使用比较广泛。它经常出现在一些线上解谜中，也有一些现成的工具帮助分析，比如stegsolve。另外，一些公司会用它在内部文档上做水印，用来在泄漏时追究员工责任。
 
 ## 变换域水印
 LSB方法依然存在添加的水印经过有损压缩后容易丢失的问题。为了提高水印的鲁棒性，一些人提出了在变换域上添加水印的方法。所谓变换域，是相对前一节的空间域（像素域）而言的。一般我们管原始的像素数据叫空间域（Spatial Domain）系数，因为每一个像素都代表它所在坐标的空间位置的采样值。当我们希望从另一个角度分析图像，就会对图像进行线性变换，也就有了各种变换域。最常用的变换域就是频率域，它有很多优秀的性质方便我们分析和操作数据。
@@ -194,7 +194,7 @@ _完整的隐形水印系统[[10]](#ref10)_
 
 <span id = "ref4">[4] Recommendation ITU-T H.264</span>
 
-<span id = "ref5">[5] https://en.wikipedia.org/wiki/Frequency_domain</span>
+<span id = "ref5">[5] [https://en.wikipedia.org/wiki/Frequency_domain](https://en.wikipedia.org/wiki/Frequency_domain) </span>
 
 <span id = "ref6">[6] I.J. Cox, J. Kilian, F.T. Leighton, T. Shamoon. Secure spread spectrum watermarking for multimedia. 1997.</span>
 
