@@ -19,61 +19,8 @@ math: true
 ## GCC上层代码结构
 首先我们看一下GCC的上层代码结构：
 
-```mermaid
-classDiagram
-    direction LR
-    SendSideCongestionController *-- NetworkControllerInterface
-    SendSideCongestionController *-- CongestionControlHandler
-    NetworkControllerInterface <|.. GoogCcNetworkController
-    GoogCcNetworkController *-- ProbeController
-    GoogCcNetworkController *-- ProbeBitrateEstimator
-    GoogCcNetworkController *-- AlrDetector
-    GoogCcNetworkController *-- DelayBasedBwe
-    GoogCcNetworkController *-- AcknowledgedBitrateEstimator
-    GoogCcNetworkController *-- SendSideBandwidthEstimation
-    class SendSideCongestionController{
-        +SetBweBitrates()
-        +OnNetworkRouteChanged()
-        +AvailableBandwidth()
-    }
-    class NetworkControllerInterface{
-        +OnNetworkAvailability()
-        +OnNetworkRouteChange()
-        +OnProcessInterval()
-        +OnRemoteBitrateReport()
-        +OnRoundTripTimeUpdate()
-        +OnSentPacket()
-        +OnStreamsConfig()
-        +OnTargetRateConstraints()
-        +OnTransportLossReport()
-        +OnTransportPacketsFeedback()
-    }
-    class CongestionControlHandler{
-        +PostUpdates()
-    }
-    class ProbeController{
-        +RequestProbe()
-    }
-    class ProbeBitrateEstimator{
-        +HandleProbeAndEstimateBitrate()
-    }
-    class AlrDetector{
-        +OnBytesSent()
-        +SetEstimatedBitrate()
-    }
-    class AcknowledgedBitrateEstimator{
-        +IncomingPacketFeedbackVector()
-    }
-    class DelayBasedBwe{
-        +IncomingPacketFeedbackVector()
-    }
-    class SendSideBandwidthEstimation{
-        +IncomingPacketFeedbackVector()
-        +UpdateDelayBasedEstimate()
-        +SetAcknowledgedRate()
-        +CurrentEstimate()
-    }
-```
+![GCC上层代码结构](/posts/2022-01-18/GCC_UML.jpg)
+_GCC上层代码结构_
 
 - **SendSideCongestionController**: 发送端拥塞控制的总控制类。该类在72版本中仍处于重构阶段，有两个同名实现，所属不同的命名空间，并且在将来会被移除。不过它的移除并没有影响下层逻辑，所以对本文影响不大。
 - **NetworkControllerInterface**: 该接口接收各类网络事件，并返回带宽探测的结果。
@@ -88,17 +35,8 @@ classDiagram
 
 下图表达了一个典型的，TransportCC触发网络模型更新的例子，读者可以大致感受一下它们是怎么配合工作的。各个子模块的细节将在接下来几节中介绍。
 
-```mermaid
-flowchart TD
-    GoogCcNetworkController -- TransportCC --> AcknowledgedBitrateEstimator
-    GoogCcNetworkController -- TransportCC --> DelayBasedBwe
-    GoogCcNetworkController -- TransportCC --> SendSideBandwidthEstimation
-    GoogCcNetworkController -- TransportCC --> ProbeBitrateEstimator
-    AcknowledgedBitrateEstimator -- acknowledged bitrate --> DelayBasedBwe
-    ProbeBitrateEstimator -- probe bitrate --> DelayBasedBwe
-    DelayBasedBwe -- delay based bitrate --> SendSideBandwidthEstimation
-    SendSideBandwidthEstimation -- bandwidth, lossrate, rtt --> CongestionControlHandler
-```
+![GCC网络模型更新流程的例子](/posts/2022-01-18/GCC_example.jpg)
+_GCC网络模型更新流程的例子_
 
 ## 带宽的主动探测（ProbeController与ProbeBitrateEstimator）
 RTC中的探测（probe）指的是使用大量探测包，主动探测当前带宽上限的行为。一般有以下几个原因会触发probe询问事件：
@@ -115,12 +53,8 @@ RTC中的探测（probe）指的是使用大量探测包，主动探测当前带
 ### 探测包的分配
 ProbeController的内部结构是一个简单的状态机：
 
-```mermaid
-stateDiagram-v2
-    kInit --> kWaitingForProbingResult
-    kWaitingForProbingResult --> kProbingComplete
-    kProbingComplete --> kWaitingForProbingResult
-```
+![ProbeController状态机](/posts/2022-01-18/probe_controller.jpg)
+_ProbeController状态机_
 
 在不同的状态下，ProbeController会对不同的询问事件做不同的处理，下面仅列举几个比较重要的规则：
 - 当处于`kInit`状态时，进行两次探测。第一次的探测码率是用户配置的初始码率的3倍，第二次是6倍，同时状态迁移至`kWaitingForProbingResult`。
@@ -131,17 +65,8 @@ stateDiagram-v2
 ### 通过探测包的反馈估计带宽
 Pacer得到目标探测码率后，开始发送探测包。接收端不需要识别是否是探测包，统一根据Transport CC协议返回feedback即可。发送端收到feedback后，根据id判断它对应的是探测包还是普通媒体包。如果是探测包，则传给ProbeBitrateEstimator，用于计算主动探测的带宽。ProbeBitrateEstimator首先用该组探测包的总数据量除以首包和尾包的时间间隔得到码率，再按照下图流程进行调整。图中接收码率低于发送码率的0.9倍时，算法认为发送码率已经达到网络通道的瓶颈，为了防止发生网络拥塞，所以额外降低了码率。
 
-```mermaid
-flowchart TD
-    A[Calculate local send bitrate according to history] --> B[Calculate remote receive bitrate according to feedback]
-    B --> C[/recv_bps > 2.0 * send_bps?\]
-    C -- No --> D[result = the smaller of recv_bps and send_bps]
-    C -- Yes --> E(return unsuccessful)
-    D --> F[/recv_bps < 0.9 * send_bps?\]
-    F -- Yes --> G[result *= 0.95]
-    F -- No --> H(return result)
-    G --> H
-```
+![主动探测带宽的计算过程](/posts/2022-01-18/probe_bitrate.jpg)
+_主动探测带宽的计算过程_
 
 可以看到整个主动探测过程使用了大量的经验值，实现并不美观，令人担心其普适性。幸运的是主动探测的主要作用仅仅是在对话开启或网络发生状况时快速上探带宽，防止画面长时间模糊。上探完成后，GCC有更精细的算法去进一步调整评估结果。
 
