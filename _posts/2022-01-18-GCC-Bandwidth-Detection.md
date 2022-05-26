@@ -116,7 +116,7 @@ _AimdRateControl内部状态机_
 _AimdRateControl处理流程_
 
 这里对流程图做几点说明：
-- 为了保证输出带宽曲线的平滑，图中使用的rtt默认是ReceivedReport（一种对端反馈的RTCP包，包含的信息能够帮助本地计算出rtt等信息[[2]](#ref2）中的rtt的平均值。如果经过配置，也可能使用TransportCC来计算平均rtt。
+- 为了保证输出带宽曲线的平滑，图中使用的rtt默认是ReceivedReport（一种对端反馈的RTCP包，包含的信息能够帮助本地计算出rtt等信息[[2]](#ref2)中的rtt的平均值。如果经过配置，也可能使用TransportCC来计算平均rtt。
 - `1200Bytes / respond_time * duration` 中的1200Bytes表示一个网络包的平均大小，respond_time暂时可以看做rtt，duration指的是两次处理的间隔。也就是说，这个计算追求的效果是每个rtt多发一个包。这和TCP的增窗算法很像。
 - 至于为什么rtt要额外加100ms，按照代码注释的说明，应该是给拥塞探测的延迟预留的。考虑到TransportCC的传输间隔和时间，以及线性拟合本身需要一定的数据量才能体现出时延的变化趋势。从拥塞实际发生到trendline探测到它之间一般有几十到几百毫秒的延迟。所以这里保守起见预留了100ms延迟，进一步降低网络拥塞对通信质量的影响。当然，代价就是某些情况下带宽上探得更慢了。
 - 图中省略了许多输出上下限Clip的操作，这些操作可以防止带宽波动过大以及无限制的上探等问题，不过全都贴上来就显得太琐碎了。
@@ -124,22 +124,8 @@ _AimdRateControl处理流程_
 ## 带宽的最终决策（SendSideBandwidthEstimation）
 DelayBasedBwe得出结果后，GCC会将其和rtt、lossrate等信息一起传给SendSideBandwidthEstimation。并且周期性的调用后者的UpdateEstimate()接口更新评估带宽。这个带宽就是GCC的最终输出了，它会被传给bitrate_controller用作带宽分配。下图是UpdateEstimate()的大致流程。网络状态良好时除了乘以1.08还额外加了1000的目的是防止在带宽过低时上探速度过慢。**另外大于15秒超时的时候码率下降至0.8倍实际是实验性质的代码，默认并没有开启**。
 
-```mermaid
-flowchart TD
-    A[/loss_rate == 0 and in first 2 sceonds?\] -- YES --> B(Return delay_based_bitrate)
-    A -- NO --> C[/duration < 6 sec?\]
-    C -- YES --> D[/loss_rate < 0.02?\]
-    D -- YES --> E[bitrate = min bitrate in the last 1 sec]
-    E --> F(Return max 1.08*bitrate+1000, delay_based_bitrate)
-    D -- NO --> G[/loss_rate > 0.1?\]
-    G -- YES --> H[bitrate *= 1 - 0.5*loss_rate]
-    H --> I(Return min bitrate, delay_based_bitrate)
-    G -- NO --> J(do nothing)
-    C -- NO --> K[/duration > 15 sec?\]
-    K -- YES --> L[experiment code: bitrate *= 0.8]
-    L --> I
-    K -- NO --> J
-```
+![AimdRateControl处理流程](/posts/2022-01-18/ssbwe.jpg)
+_UpdateEstimate_
 
 ## 总结
 本文仅概述了GCC最基本的发送端带宽探测算法，省略了大量默认不启用的模块，包括但不限于`LossBasedBandwidthEstimation`，`CongestionWindowPushbackController`，`LinkCapacityTracker`。并且考虑到WebRTC版本更新频繁，代码差异巨大。建议读者仅借助本文体会GCC大体的工作流程，钻研细节的工作还是留在读者实际使用的版本上吧。
