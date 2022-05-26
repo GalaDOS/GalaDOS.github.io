@@ -96,66 +96,24 @@ _主动探测带宽的计算过程_
 该类是GCC最重要的模块，包含两个主要功能。一是根据transport cc反馈的时间信息来探测当前网络状态
 ；二是根据得到的网络状态调整预测带宽。前者由成员`TrendlineEstimator`实现，后者由成员`AimdRateControl`实现：
 
-```mermaid
-classDiagram
-    direction LR
-    DelayBasedBwe *-- DelayIncreaseDetectorInterface
-    DelayBasedBwe *-- AimdRateControl
-    DelayIncreaseDetectorInterface <|.. TrendlineEstimator
-    class DelayBasedBwe{
-        +IncomingPacketFeedbackVector(transport_cc)
-        +LatestEstimate(DataRate*)
-    }
-    class DelayIncreaseDetectorInterface{
-        +Update(recv_delta, send_delta, arrival_time)
-        +State()
-    }
-    class TrendlineEstimator{
-        -deque"pair'double, double'" delay_hist_
-        -BandwidthUsage hypothesis_
-    }
-    class AimdRateControl{
-        +TimeToReduceFurther(Timestamp, DataRate) : bool
-        +LatestEstimate()
-        +Update(RateControlInput, Timestamp)
-        +SetRtt(TimeDelta)
-    }
-```
+![DelayBasedBwe的构成](/posts/2022-01-18/delay_based_bwe.jpg)
+_DelayBasedBwe的构成_
 
 ### 网络拥塞状态的探测（TrendlineEstimator）
-TCP传输一般是根据是否丢包来探测拥塞的（不全是，比如BBR策略）。但是发生丢包时，传输时延已经由于网络节点的buffer缓存而增加了。所以对于时延敏感的RTC应用来说，需要更早的探测出拥塞状态。而在TransportCC中存储着一组媒体包的对端接收时间（arrive_time, AT）。利用它和本地的发送历史（send time，ST），可以计算出每个媒体包的网络传输耗时的变化：
+TCP传输一般是根据是丢包来判断网络是否发生拥塞的。但是发生丢包时，传输时延往往已经由于网络节点的buffer而增加了。所以对于时延敏感的RTC应用来说，需要更早的探测到拥塞。最直接的办法就是根据时延的变化来探测。在TransportCC中存储着一组媒体包的对端接收时间（arrive_time, AT）。利用它和本地的发送历史（send time，ST），可以计算出每个媒体包的网络传输耗时的变化：
 
 $$ delta = (AT_{2} - ST_{2}) - (AT_{1} - ST_{1}) $$
 
 当这个delta变大时，我们就可以认为网络发生了拥塞。在`TrendlineEstimator`出现之前，GCC是使用卡尔曼滤波来评估网络状态的。现在谷歌换成了更简单的Trendline，其原理是对delta样本进行一阶线性拟合，根据结果的斜率来判断网络状态。斜率大于0时是Overusing，小于0时是Underusing，约等于0时是Normal。**这里要注意Underusing这个状态，他比较容易造成误解。一般来说，只有先发生拥塞，时延才有下降的可能性。也就是说，Underusing表达的是网络正在从拥塞中恢复，而不是网络带宽没有被充分利用。**
 
 ### 根据网络状态调整带宽（AimdRateControl）
-熟悉TCP传输的读者应该对AIMD很熟悉。它的意思是加性增，乘性减。其目的是在网络正常时缓慢增涨传输速率，在网络拥塞时快速减少，从而在避免拥塞的同时充分利用带宽。AimdRateControl先根据Trendline的探测结果迁移内部状态机的状态，再结合该状态与rtt、acknowledged bitrate等信息决策带宽：
+熟悉TCP的读者应该对AIMD很熟悉。它的意思是加性增（Additive Increase），乘性减（Multiplicative Decrease）。其目的是在网络正常时缓慢增加传输速率，而在拥塞时快速减少，从而在避免拥塞的同时尽可能利用带宽。AimdRateControl先根据Trendline的探测结果迁移内部状态机的状态，再结合该状态与rtt、acknowledged bitrate等信息决策带宽：
 
-```mermaid
-stateDiagram-v2
-    kRcHold --> kRcIncrease : network normal
-    kRcHold --> kRcDecrease : network overusing
-    kRcIncrease --> kRcDecrease : network overusing
-    kRcIncrease --> kRcHold : network underusing
-    kRcDecrease --> kRcHold: network underusing
-    kRcDecrease --> kRcHold: bitrate reduced once
-```
+![AimdRateControl内部状态机](/posts/2022-01-18/aimd_state.jpg)
+_AimdRateControl内部状态机_
 
-```mermaid
-flowchart TD
-    A[Calculate rtt accroding to feedback] --> B[/is network overuse?\]
-    B -- Yes --> C[/time_now - last_redution_time > rtt?\]
-    B -- No --> D[update state machine]
-    C -- Yes --> D
-    D -- kRcHold --> E(Return current_bitrate)
-    D -- kRcIncrease --> F(Return current_bitrate + 1200Bytes * duration)
-    D -- kRcDecrease --> G[new_bitrate = acknowledged_bitrate * 0.85]
-    G --> H(Return min current_bitrate, new_bitrate)
-    C -- No --> I[/acknowledged_bitrate < current_bitrate * 0.5?\]
-    I -- Yes --> D
-    I -- No --> E
-```
+![AimdRateControl处理流程](/posts/2022-01-18/aimd_flow.jpg)
+_AimdRateControl处理流程_
 
 ## 带宽的最终决策（SendSideBandwidthEstimation）
 To be continued.
