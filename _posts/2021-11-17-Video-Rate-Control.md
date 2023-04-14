@@ -21,12 +21,12 @@ math: true
 ## 码控的类型
 视频编码的码率控制（Rate-Control），主要指编码过程中，通过调整QP来控制视频码率的行为。在不同的使用场景下，用户对视频的码率大小、稳定性会有不同的要求，因此码率控制的类型也多种多样。
 
-比如观看离线视频文件时，往往不需要此视频具备恒定的码率。因为整个文件都在本地，只要磁盘IO和设备解码能力都合格，基本就不会发生卡顿问题（这里不讨论硬件解码的buffer限制以及内网带宽限制）。所以压制这类视频时会倾向于保证质量而非码率平稳性。画面纹理比较复杂或运动剧烈的场景，码率给高一些，以保证画面质量；而画面简单的场景，码率就给低一些，节省硬盘空间。这种码控策略我们统称为`可变码率（VBR）`。
+比如观看离线视频文件时，往往不需要此视频具备恒定的码率。因为整个文件都在本地，只要磁盘IO和设备解码能力都合格，基本就不会发生卡顿问题（这里不讨论硬件解码的buffer限制以及内网带宽限制）。所以压制这类视频时会倾向于在相同的文件大小下保证画面质量而非码率平稳性。画面纹理比较复杂或运动剧烈的场景，码率给高一些，以保证画面质量；而画面简单的场景，码率就给低一些，节省硬盘空间。这种码控策略我们统称为`可变码率（VBR）`。
 
-但在观看在线视频时，由于用户带宽是恒定的，能够缓存的数据量也有限，所以需要对码率做一些限制。否则一些瞬时码率过高的片段可能会引起卡顿。此外还有一点，由于CDN是按流量计费的，视频网站如果使用VBR编码视频会使带宽成本变得不可控。所以压制这类视频时，会倾向于选择`恒定码率（CBR）`。
+但在观看在线视频时，由于用户带宽有限，客户端缓存的数据量也有限，所以需要对码率做一些限制。否则一些瞬时码率过高的片段可能会引起卡顿。此外还有一点，由于CDN是按流量计费的，视频网站如果使用VBR编码视频会使带宽成本变得不可控。所以压制这类视频时，会倾向于选择`恒定码率（CBR）`。
 
 ![不同场景下的码控需求](/posts/2021-11-17/bitrate_requirement.jpg)
-_不同场景下的码控需求_
+_不同场景下的码控需求（相同文件大小的前提下）_
 
 本文接下来的讨论内容主要集中在CBR，但其中的一些改良算法其实也可以用在VBR。
 
@@ -114,8 +114,8 @@ MB-Tree的实现依赖于x264内部的lookahead结构。所谓的lookahead，是
 ## 参考文献
 <span id = "ref1">[1] JCTVC-K0103</span>
 
-<span id = "ref2">[2] C.E. Shannon, Coding theorems for a discrete source with a fidelity criterion, in IRENational Conventwn Record, Part4, pp. 142-163, 1959.</span>
+<span id = "ref2">[2] C.E. Shannon. Coding theorems for a discrete source with a fidelity criterion. In IRENational Conventwn Record, Part4, pp. 142-163, 1959.</span>
 
-<span id = "ref3">[3] A. Ortega; K. Ramchandran, Rate-distortion methods for image and video compression, IEEE Signal Processing Magazine, Volume: 15, Issue: 6, Nov 1998.</span>
+<span id = "ref3">[3] A. Ortega; K. Ramchandran. Rate-distortion methods for image and video compression. IEEE Signal Processing Magazine, Volume: 15, Issue: 6, Nov 1998.</span>
 
 <span id = "ref4">[4] Garrett-Glaser J. A novel macroblock-tree algorithm for high-performance optimization of dependent video coding in H.264/AVC[J]. Tech. Rep., 2009.</span>
